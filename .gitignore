@@ -1,0 +1,9 @@
+build/
+*.user
+.vs/
+.vscode/
+CMakeCache.txt
+CMakeFiles/
+compile_commands.json
+*.exe
+*.dll
