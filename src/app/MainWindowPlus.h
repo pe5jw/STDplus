@@ -7,6 +7,7 @@
 class TciClient;
 class N1mmCat;
 class VoiceKeyer;
+class CwModem;
 
 // MainWindowPlus extends MainWindow with:
 //  - STDplus branding (logo "STD+" replacing "STD", window icon overlay)
@@ -37,5 +38,6 @@ private:
   TciClient* tci_         = nullptr;  // borrowed from MainWindow
   VoiceKeyer* voiceKeyer_ = nullptr;
   N1mmCat*    n1mmCat_    = nullptr;
+  CwModem*    cwModem_    = nullptr;
   bool        featuresWired_ = false;
 };

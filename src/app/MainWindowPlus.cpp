@@ -14,6 +14,7 @@
 #include <QLabel>
 #include <QMenu>
 #include <QMenuBar>
+#include <QMessageBox>
 #include <QPainter>
 #include <QPainterPath>
 #include <QPushButton>
@@ -26,7 +27,6 @@
 #include <QToolButton>
 #include <QUrl>
 #include <QVBoxLayout>
-#include <QMessageBox>
 #include <QWidget>
 #include <QWidgetAction>
 
@@ -169,30 +169,53 @@ void MainWindowPlus::showEvent(QShowEvent* event)
 }
 
 // ---------------------------------------------------------------------------
-// patchBrandBar — hide the upstream "STD" widget and insert "STD+" next to it
+// patchBrandBar — swap the upstream "STD" label widget for "STD+"
 // ---------------------------------------------------------------------------
 void MainWindowPlus::patchBrandBar()
 {
-  // brandName is the RaisedBrandTitle in MainWindow::buildBrandBar().
-  // Layout: brandBar -> host -> words (QWidget, QVBoxLayout) -> [brandName, brandSubtitle]
-  auto* brandName = findChild<QWidget*>(QStringLiteral("brandName"));
-  if (!brandName) return;
+  // The upstream brandBar toolbar is named "brandBar".
+  auto* bar = findChild<QToolBar*>(QStringLiteral("brandBar"));
+  if (!bar) return;
 
-  brandName->hide();  // hide the original "STD" painted widget
+  // Find the widget with objectName "brandName" (RaisedBrandTitle).
+  auto* old = bar->findChild<QWidget*>(QStringLiteral("brandName"));
+  if (!old) return;
 
-  // Insert our STD+ widget at the same slot in the parent layout.
-  auto* pw = brandName->parentWidget();
-  auto* plus = new RaisedBrandTitlePlus(pw ? pw : this);
-  if (pw) {
-    if (auto* bl = qobject_cast<QBoxLayout*>(pw->layout())) {
-      const int idx = bl->indexOf(brandName);
-      bl->insertWidget(idx >= 0 ? idx : 0, plus);
-      return;
+  // Qt toolbars hold widgets via QWidgetAction; we need to find its action.
+  for (QAction* act : bar->actions()) {
+    auto* wa = qobject_cast<QWidgetAction*>(act);
+    if (!wa) continue;
+    // The toolbar may wrap widgets in a container — walk children.
+    QWidget* hosted = wa->defaultWidget();
+    if (!hosted) continue;
+    if (hosted == old || hosted->findChild<QWidget*>(QStringLiteral("brandName"))) {
+      // Replace the hosted widget with our STD+ version inside the same container.
+      auto* plus = new RaisedBrandTitlePlus(hosted->parentWidget());
+      auto* layout = hosted->layout();
+      if (layout) {
+        const int idx = layout->indexOf(old);
+        if (idx >= 0) {
+          layout->removeWidget(old);
+          old->hide();
+          // QBoxLayout: insert at same position
+          if (auto* bl = qobject_cast<QBoxLayout*>(layout))
+            bl->insertWidget(idx, plus);
+          else
+            layout->addWidget(plus);
+          return;
+        }
+      }
+      break;
     }
-    pw->layout() ? pw->layout()->addWidget(plus) : plus->setParent(pw);
   }
+
+  // Fallback: just add our widget at the start of the bar.
+  auto* wa = new QWidgetAction(bar);
+  wa->setDefaultWidget(new RaisedBrandTitlePlus(bar));
+  bar->insertAction(bar->actions().isEmpty() ? nullptr : bar->actions().first(), wa);
 }
 
+// ---------------------------------------------------------------------------
 // showAboutPlus — tabbed About dialog: "STDplus" tab first, "STD" tab second
 // ---------------------------------------------------------------------------
 void MainWindowPlus::showAboutPlus()
