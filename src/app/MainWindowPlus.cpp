@@ -193,18 +193,21 @@ void MainWindowPlus::showEvent(QShowEvent* event)
       if (!tci_) return;
       if (on) {
         // Uncheck other checkable mode actions
-        for (QAction* a : cwAction->parentWidget()
-                              ? qobject_cast<QMenu*>(cwAction->parentWidget())->actions()
-                              : QList<QAction*>{}) {
-          if (a->isCheckable() && a != cwAction)
-            a->setChecked(false);
+        if (auto* menu = qobject_cast<QMenu*>(cwAction->parent())) {
+          for (QAction* a : menu->actions()) {
+            if (a->isCheckable() && a != cwAction)
+              a->setChecked(false);
+          }
         }
-        connect(tci_, &TciClient::audioReceived,
-                cwModem_, &CwModem::processAudio,
-                Qt::UniqueConnection);
+        // rxAudio delivers raw float samples as QByteArray; convert and forward.
+        connect(tci_, &TciClient::rxAudio, cwModem_,
+                [this](int /*rate*/, const QByteArray& mono) {
+                  const int n = mono.size() / int(sizeof(float));
+                  const auto* p = reinterpret_cast<const float*>(mono.constData());
+                  cwModem_->processAudio(QVector<float>(p, p + n));
+                }, Qt::UniqueConnection);
       } else {
-        disconnect(tci_, &TciClient::audioReceived,
-                   cwModem_, &CwModem::processAudio);
+        disconnect(tci_, &TciClient::rxAudio, cwModem_, nullptr);
       }
     });
   }
