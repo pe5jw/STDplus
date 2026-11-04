@@ -13,6 +13,9 @@
 #include <QDialogButtonBox>
 #include <QFileDialog>
 #include <QLabel>
+#include <QLineEdit>
+#include <QPlainTextEdit>
+#include <QTextEdit>
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
