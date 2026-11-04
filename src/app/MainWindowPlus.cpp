@@ -8,7 +8,6 @@
 #include "TciClient.h"
 
 #include <QAction>
-#include <functional>
 #include <QDesktopServices>
 #include <QDialog>
 #include <QDialogButtonBox>
@@ -194,19 +193,24 @@ void MainWindowPlus::showEvent(QShowEvent* event)
       if (on) {
         // Uncheck every other checkable mode action without calling the
         // private activateDigitalMode() — we handle the CW layout ourselves.
-        auto* modeMenu = findChild<QMenu*>(QStringLiteral("modeMenu"));
-        if (modeMenu) {
-          std::function<void(QMenu*)> uncheckOthers = [&](QMenu* m) {
-            for (QAction* a : m->actions()) {
-              if (a->menu()) {
-                uncheckOthers(a->menu());
-              } else if (a->isCheckable() && a != cwAction) {
-                const QSignalBlocker sb(a);
-                a->setChecked(false);
+        // Iterative menu walk — MSVC does not allow recursive std::function
+        // inside a nested lambda, so we use an explicit queue instead.
+        {
+          auto* mm = findChild<QMenu*>(QStringLiteral("modeMenu"));
+          if (mm) {
+            QList<QMenu*> toVisit{mm};
+            while (!toVisit.isEmpty()) {
+              QMenu* cur = toVisit.takeFirst();
+              for (QAction* a : cur->actions()) {
+                if (a->menu())
+                  toVisit.append(a->menu());
+                else if (a->isCheckable() && a != cwAction) {
+                  const QSignalBlocker sb(a);
+                  a->setChecked(false);
+                }
               }
             }
-          };
-          uncheckOthers(modeMenu);
+          }
         }
 
         // Show the keyboard-receive text box (rxEcho) for CW output.
