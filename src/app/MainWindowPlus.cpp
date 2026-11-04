@@ -214,30 +214,28 @@ void MainWindowPlus::showEvent(QShowEvent* event)
         }
 
         // Show the keyboard-receive text box (rxEcho) for CW output.
-        if (auto* echo = findChild<QTextEdit*>(QStringLiteral("rxEcho"))) {
-          echo->setVisible(true);
-          echo->setLineWrapMode(QTextEdit::WidgetWidth);
-          echo->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-          echo->setPlaceholderText(QStringLiteral("CW decoded text appears here."));
+        {
+          QTextEdit* echo = findChild<QTextEdit*>(QStringLiteral("rxEcho"));
+          if (echo) {
+            echo->setVisible(true);
+            echo->setLineWrapMode(QTextEdit::WidgetWidth);
+            echo->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+            echo->setPlaceholderText(QStringLiteral("CW decoded text appears here."));
+          }
         }
         // Hide the FT8-style decode list; show the QSO bar.
-        if (auto* edit = findChild<QPlainTextEdit*>(QStringLiteral("receiveText")))
-          edit->setVisible(false);
-        if (auto* hdr = findChild<QLabel*>(QStringLiteral("decodeHeader")))
-          hdr->setVisible(false);
-        if (auto* flt = findChild<QLineEdit*>(QStringLiteral("decodeFilter")))
-          flt->setVisible(false);
-        if (auto* clr = findChild<QPushButton*>(QStringLiteral("decodeClear")))
-          clr->setVisible(false);
-        if (auto* bar = findChild<QWidget*>(QStringLiteral("qsoBar")))
-          bar->setVisible(true);
+        { QPlainTextEdit* w = findChild<QPlainTextEdit*>(QStringLiteral("receiveText")); if (w) w->setVisible(false); }
+        { QLabel*       w = findChild<QLabel*>(QStringLiteral("decodeHeader"));          if (w) w->setVisible(false); }
+        { QLineEdit*    w = findChild<QLineEdit*>(QStringLiteral("decodeFilter"));        if (w) w->setVisible(false); }
+        { QPushButton*  w = findChild<QPushButton*>(QStringLiteral("decodeClear"));       if (w) w->setVisible(false); }
+        { QWidget*      w = findChild<QWidget*>(QStringLiteral("qsoBar"));               if (w) w->setVisible(true);  }
 
         // Wire CW audio: rxAudio delivers raw float samples as QByteArray.
         if (tci_)
           connect(tci_, &TciClient::rxAudio, cwModem_,
                   [this](int /*rate*/, const QByteArray& mono) {
                     const int n = mono.size() / int(sizeof(float));
-                    const auto* p = reinterpret_cast<const float*>(mono.constData());
+                    const float* p = reinterpret_cast<const float*>(mono.constData());
                     cwModem_->processAudio(QVector<float>(p, p + n));
                   }, Qt::UniqueConnection);
       } else {
