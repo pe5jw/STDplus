@@ -189,53 +189,58 @@ void MainWindowPlus::showEvent(QShowEvent* event)
         "Decoded callsigns are forwarded to N1MM Logger+ via UDP."));
     modeMenu->addAction(cwAction);
 
-    connect(cwAction, &QAction::toggled, this, [this, cwAction](bool on) {
+    // Resolve widget pointers once, outside the lambda — MSVC cannot parse
+    // findChild<T*>() template calls inside a nested lambda body.
+    QMenu*        mm_        = findChild<QMenu*>(QStringLiteral("modeMenu"));
+    QTextEdit*    wEcho_     = findChild<QTextEdit*>(QStringLiteral("rxEcho"));
+    QPlainTextEdit* wRx_     = findChild<QPlainTextEdit*>(QStringLiteral("receiveText"));
+    QLabel*       wHdr_      = findChild<QLabel*>(QStringLiteral("decodeHeader"));
+    QLineEdit*    wFlt_      = findChild<QLineEdit*>(QStringLiteral("decodeFilter"));
+    QPushButton*  wClr_      = findChild<QPushButton*>(QStringLiteral("decodeClear"));
+    QWidget*      wBar_      = findChild<QWidget*>(QStringLiteral("qsoBar"));
+
+    connect(cwAction, &QAction::toggled, this,
+            [this, cwAction, mm_, wEcho_, wRx_, wHdr_, wFlt_, wClr_, wBar_](bool on) {
       if (on) {
-        // Uncheck every other checkable mode action without calling the
-        // private activateDigitalMode() — we handle the CW layout ourselves.
-        // Iterative menu walk — MSVC does not allow recursive std::function
-        // inside a nested lambda, so we use an explicit queue instead.
-        {
-          auto* mm = findChild<QMenu*>(QStringLiteral("modeMenu"));
-          if (mm) {
-            QList<QMenu*> toVisit{mm};
-            while (!toVisit.isEmpty()) {
-              QMenu* cur = toVisit.takeFirst();
-              for (QAction* a : cur->actions()) {
-                if (a->menu())
-                  toVisit.append(a->menu());
-                else if (a->isCheckable() && a != cwAction) {
-                  const QSignalBlocker sb(a);
-                  a->setChecked(false);
-                }
+        // Uncheck every other checkable mode action (iterative — MSVC-safe).
+        if (mm_) {
+          QList<QMenu*> toVisit;
+          toVisit.append(mm_);
+          while (!toVisit.isEmpty()) {
+            QMenu* cur = toVisit.takeFirst();
+            for (int i = 0; i < cur->actions().size(); ++i) {
+              QAction* a = cur->actions().at(i);
+              if (a->menu())
+                toVisit.append(a->menu());
+              else if (a->isCheckable() && a != cwAction) {
+                const QSignalBlocker sb(a);
+                a->setChecked(false);
               }
             }
           }
         }
 
-        // Show the keyboard-receive text box (rxEcho) for CW output.
-        {
-          QTextEdit* echo = findChild<QTextEdit*>(QStringLiteral("rxEcho"));
-          if (echo) {
-            echo->setVisible(true);
-            echo->setLineWrapMode(QTextEdit::WidgetWidth);
-            echo->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-            echo->setPlaceholderText(QStringLiteral("CW decoded text appears here."));
-          }
+        // Show rxEcho for CW decoded text.
+        if (wEcho_) {
+          wEcho_->setVisible(true);
+          wEcho_->setLineWrapMode(QTextEdit::WidgetWidth);
+          wEcho_->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+          wEcho_->setPlaceholderText(QStringLiteral("CW decoded text appears here."));
         }
-        // Hide the FT8-style decode list; show the QSO bar.
-        { QPlainTextEdit* w = findChild<QPlainTextEdit*>(QStringLiteral("receiveText")); if (w) w->setVisible(false); }
-        { QLabel*       w = findChild<QLabel*>(QStringLiteral("decodeHeader"));          if (w) w->setVisible(false); }
-        { QLineEdit*    w = findChild<QLineEdit*>(QStringLiteral("decodeFilter"));        if (w) w->setVisible(false); }
-        { QPushButton*  w = findChild<QPushButton*>(QStringLiteral("decodeClear"));       if (w) w->setVisible(false); }
-        { QWidget*      w = findChild<QWidget*>(QStringLiteral("qsoBar"));               if (w) w->setVisible(true);  }
+        // Hide FT8 decode widgets; show QSO bar.
+        if (wRx_)  wRx_->setVisible(false);
+        if (wHdr_) wHdr_->setVisible(false);
+        if (wFlt_) wFlt_->setVisible(false);
+        if (wClr_) wClr_->setVisible(false);
+        if (wBar_) wBar_->setVisible(true);
 
         // Wire CW audio: rxAudio delivers raw float samples as QByteArray.
         if (tci_)
           connect(tci_, &TciClient::rxAudio, cwModem_,
                   [this](int /*rate*/, const QByteArray& mono) {
                     const int n = mono.size() / int(sizeof(float));
-                    const float* p = reinterpret_cast<const float*>(mono.constData());
+                    const float* p =
+                        reinterpret_cast<const float*>(mono.constData());
                     cwModem_->processAudio(QVector<float>(p, p + n));
                   }, Qt::UniqueConnection);
       } else {
