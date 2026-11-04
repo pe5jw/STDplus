@@ -186,11 +186,12 @@ void MainWindowPlus::showEvent(QShowEvent* event)
     connect(cwAction, &QAction::toggled, this,
             [this, cwAction, wEcho_](bool on) {
       if (on) {
-        // Trigger the RTTY action — this calls activateDigitalMode("RTTY")
-        // internally, making rxEcho + QSO bar visible.
-        if (auto* rttyAct = findChild<QAction*>(QStringLiteral("modeRtty")))
-          rttyAct->trigger();
-        // Re-check cwAction (triggering RTTY unchecked it).
+        // Show the keyboard-receive widget directly — do NOT trigger the RTTY
+        // action because activateDigitalMode("RTTY") sets mshvFamily=false,
+        // which breaks the FT8 armed condition and stops decoding.
+        showKeyboardReceive(QStringLiteral("RTTY"));
+        // Re-check cwAction (showKeyboardReceive does not uncheck it, but
+        // keep the blocker for safety).
         { const QSignalBlocker sb(cwAction); cwAction->setChecked(true); }
         if (wEcho_)
           wEcho_->setPlaceholderText(
@@ -237,9 +238,9 @@ void MainWindowPlus::showEvent(QShowEvent* event)
     connect(dvkAction, &QAction::toggled, this,
             [this, dvkAction, txDock_](bool on) {
       if (on) {
-        // Trigger RTTY action to get keyboard-receive layout.
-        if (auto* rttyAct = findChild<QAction*>(QStringLiteral("modeRtty")))
-          rttyAct->trigger();
+        // Show the keyboard-receive widget directly — same reason as CW:
+        // triggering the RTTY action sets mshvFamily=false and breaks FT8.
+        showKeyboardReceive(QStringLiteral("RTTY"));
         // Re-check DVK action.
         { const QSignalBlocker sb(dvkAction); dvkAction->setChecked(true); }
         if (txDock_) txDock_->setVisible(false);
