@@ -58,8 +58,8 @@ int main(int argc, char* argv[])
   WaterfallGpu::prepareProcessBackend(!selftest);
 
   QApplication app(argc, argv);
-  QApplication::setOrganizationName("PE5JW");
-  QApplication::setApplicationName("STDplus");
+  QApplication::setOrganizationName("N8SDR");  // same as upstream STD — shared QSettings
+  QApplication::setApplicationName("STD");     // same as upstream STD — shared QSettings
   QApplication::setApplicationDisplayName("STDplus");
   QApplication::setApplicationVersion(STDPLUS_VERSION);
   QApplication::setWindowIcon(stdplusIcon());
