@@ -8,6 +8,7 @@
 #include "TciClient.h"
 
 #include <QAction>
+#include <functional>
 #include <QDesktopServices>
 #include <QDialog>
 #include <QDialogButtonBox>
@@ -191,24 +192,43 @@ void MainWindowPlus::showEvent(QShowEvent* event)
 
     connect(cwAction, &QAction::toggled, this, [this, cwAction](bool on) {
       if (on) {
-        // Let MainWindow handle mode switching (unchecks other actions,
-        // updates layout, status strip, profile, etc.).
-        activateDigitalMode(QStringLiteral("CW"));
+        // Uncheck every other checkable mode action without calling the
+        // private activateDigitalMode() — we handle the CW layout ourselves.
+        auto* modeMenu = findChild<QMenu*>(QStringLiteral("modeMenu"));
+        if (modeMenu) {
+          std::function<void(QMenu*)> uncheckOthers = [&](QMenu* m) {
+            for (QAction* a : m->actions()) {
+              if (a->menu()) {
+                uncheckOthers(a->menu());
+              } else if (a->isCheckable() && a != cwAction) {
+                const QSignalBlocker sb(a);
+                a->setChecked(false);
+              }
+            }
+          };
+          uncheckOthers(modeMenu);
+        }
 
-        // activateDigitalMode calls showKeyboardReceive("CW") which hides
-        // rxEcho because "CW" is not in keyboardTextMode(). Force it back
-        // visible so decoded text has somewhere to go.
+        // Show the keyboard-receive text box (rxEcho) for CW output.
         if (auto* echo = findChild<QTextEdit*>(QStringLiteral("rxEcho"))) {
           echo->setVisible(true);
           echo->setLineWrapMode(QTextEdit::WidgetWidth);
           echo->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-          echo->setPlaceholderText(QStringLiteral(
-              "CW decoded text appears here."));
+          echo->setPlaceholderText(QStringLiteral("CW decoded text appears here."));
         }
+        // Hide the FT8-style decode list; show the QSO bar.
+        if (auto* edit = findChild<QPlainTextEdit*>(QStringLiteral("receiveText")))
+          edit->setVisible(false);
+        if (auto* hdr = findChild<QLabel*>(QStringLiteral("decodeHeader")))
+          hdr->setVisible(false);
+        if (auto* flt = findChild<QLineEdit*>(QStringLiteral("decodeFilter")))
+          flt->setVisible(false);
+        if (auto* clr = findChild<QPushButton*>(QStringLiteral("decodeClear")))
+          clr->setVisible(false);
         if (auto* bar = findChild<QWidget*>(QStringLiteral("qsoBar")))
           bar->setVisible(true);
 
-        // Start audio feed: rxAudio delivers raw float samples as QByteArray.
+        // Wire CW audio: rxAudio delivers raw float samples as QByteArray.
         if (tci_)
           connect(tci_, &TciClient::rxAudio, cwModem_,
                   [this](int /*rate*/, const QByteArray& mono) {
