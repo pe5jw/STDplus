@@ -190,24 +190,35 @@ void MainWindowPlus::showEvent(QShowEvent* event)
     modeMenu->addAction(cwAction);
 
     connect(cwAction, &QAction::toggled, this, [this, cwAction](bool on) {
-      if (!tci_) return;
       if (on) {
-        // Uncheck other checkable mode actions
-        if (auto* menu = qobject_cast<QMenu*>(cwAction->parent())) {
-          for (QAction* a : menu->actions()) {
-            if (a->isCheckable() && a != cwAction)
-              a->setChecked(false);
-          }
+        // Let MainWindow handle mode switching (unchecks other actions,
+        // updates layout, status strip, profile, etc.).
+        activateDigitalMode(QStringLiteral("CW"));
+
+        // activateDigitalMode calls showKeyboardReceive("CW") which hides
+        // rxEcho because "CW" is not in keyboardTextMode(). Force it back
+        // visible so decoded text has somewhere to go.
+        if (auto* echo = findChild<QTextEdit*>(QStringLiteral("rxEcho"))) {
+          echo->setVisible(true);
+          echo->setLineWrapMode(QTextEdit::WidgetWidth);
+          echo->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+          echo->setPlaceholderText(QStringLiteral(
+              "CW decoded text appears here."));
         }
-        // rxAudio delivers raw float samples as QByteArray; convert and forward.
-        connect(tci_, &TciClient::rxAudio, cwModem_,
-                [this](int /*rate*/, const QByteArray& mono) {
-                  const int n = mono.size() / int(sizeof(float));
-                  const auto* p = reinterpret_cast<const float*>(mono.constData());
-                  cwModem_->processAudio(QVector<float>(p, p + n));
-                }, Qt::UniqueConnection);
+        if (auto* bar = findChild<QWidget*>(QStringLiteral("qsoBar")))
+          bar->setVisible(true);
+
+        // Start audio feed: rxAudio delivers raw float samples as QByteArray.
+        if (tci_)
+          connect(tci_, &TciClient::rxAudio, cwModem_,
+                  [this](int /*rate*/, const QByteArray& mono) {
+                    const int n = mono.size() / int(sizeof(float));
+                    const auto* p = reinterpret_cast<const float*>(mono.constData());
+                    cwModem_->processAudio(QVector<float>(p, p + n));
+                  }, Qt::UniqueConnection);
       } else {
-        disconnect(tci_, &TciClient::rxAudio, cwModem_, nullptr);
+        if (tci_)
+          disconnect(tci_, &TciClient::rxAudio, cwModem_, nullptr);
       }
     });
   }
