@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "MainWindowPlus.h"
+#include "CwModem.h"
 #include "N1mmCat.h"
 #include "VoiceKeyer.h"
 #include "TciClient.h"
@@ -163,6 +164,51 @@ void MainWindowPlus::showEvent(QShowEvent* event)
             tci_, [this](bool on) { tci_->setTransmit(on); });
   }
 
+
+  // -----------------------------------------------------------------------
+  // CW mode: add "CW" to the mode menu and wire CwModem to TCI audio
+  // -----------------------------------------------------------------------
+  cwModem_ = new CwModem(this);
+  if (tci_)
+    cwModem_->setClient(tci_);
+
+  // Decoded text → N1MM callsign broadcast
+  connect(cwModem_, &CwModem::textDecoded,
+          n1mmCat_, &N1mmCat::sendCallToN1mm);
+
+  // Add CW entry to the mode menu (objectName set by MainWindow).
+  auto* modeMenu = findChild<QMenu*>(QStringLiteral("modeMenu"));
+  if (modeMenu) {
+    modeMenu->addSeparator();
+    auto* cwAction = new QAction(QStringLiteral("CW"), this);
+    cwAction->setObjectName(QStringLiteral("modeCw"));
+    cwAction->setCheckable(true);
+    cwAction->setToolTip(QStringLiteral(
+        "CW decoder (fldigi-derived Schmitt-trigger AGC).\n"
+        "Decodes CW from TCI audio stream.\n"
+        "Decoded callsigns are forwarded to N1MM Logger+ via UDP."));
+    modeMenu->addAction(cwAction);
+
+    connect(cwAction, &QAction::toggled, this, [this, cwAction](bool on) {
+      if (!tci_) return;
+      if (on) {
+        // Uncheck other checkable mode actions
+        for (QAction* a : cwAction->parentWidget()
+                              ? qobject_cast<QMenu*>(cwAction->parentWidget())->actions()
+                              : QList<QAction*>{}) {
+          if (a->isCheckable() && a != cwAction)
+            a->setChecked(false);
+        }
+        connect(tci_, &TciClient::audioReceived,
+                cwModem_, &CwModem::processAudio,
+                Qt::UniqueConnection);
+      } else {
+        disconnect(tci_, &TciClient::audioReceived,
+                   cwModem_, &CwModem::processAudio);
+      }
+    });
+  }
+
   buildVoiceKeyerBar();
   buildN1mmCat();
   loadVoiceKeyerSettings();
@@ -173,46 +219,24 @@ void MainWindowPlus::showEvent(QShowEvent* event)
 // ---------------------------------------------------------------------------
 void MainWindowPlus::patchBrandBar()
 {
-  // The upstream brandBar toolbar is named "brandBar".
-  auto* bar = findChild<QToolBar*>(QStringLiteral("brandBar"));
-  if (!bar) return;
-
-  // Find the widget with objectName "brandName" (RaisedBrandTitle).
-  auto* old = bar->findChild<QWidget*>(QStringLiteral("brandName"));
+  // brandName is RaisedBrandTitle inside "words" QWidget (QVBoxLayout).
+  // Layout tree: brandBar → host(QHBoxLayout) → words(QVBoxLayout) → [brandName, brandSubtitle]
+  auto* old = findChild<QWidget*>(QStringLiteral("brandName"));
   if (!old) return;
 
-  // Qt toolbars hold widgets via QWidgetAction; we need to find its action.
-  for (QAction* act : bar->actions()) {
-    auto* wa = qobject_cast<QWidgetAction*>(act);
-    if (!wa) continue;
-    // The toolbar may wrap widgets in a container — walk children.
-    QWidget* hosted = wa->defaultWidget();
-    if (!hosted) continue;
-    if (hosted == old || hosted->findChild<QWidget*>(QStringLiteral("brandName"))) {
-      // Replace the hosted widget with our STD+ version inside the same container.
-      auto* plus = new RaisedBrandTitlePlus(hosted->parentWidget());
-      auto* layout = hosted->layout();
-      if (layout) {
-        const int idx = layout->indexOf(old);
-        if (idx >= 0) {
-          layout->removeWidget(old);
-          old->hide();
-          // QBoxLayout: insert at same position
-          if (auto* bl = qobject_cast<QBoxLayout*>(layout))
-            bl->insertWidget(idx, plus);
-          else
-            layout->addWidget(plus);
-          return;
-        }
-      }
-      break;
-    }
-  }
+  // words is brandName's direct parent; its layout is a QVBoxLayout.
+  auto* words = old->parentWidget();
+  if (!words) return;
+  auto* vbl = qobject_cast<QBoxLayout*>(words->layout());
+  if (!vbl) return;
 
-  // Fallback: just add our widget at the start of the bar.
-  auto* wa = new QWidgetAction(bar);
-  wa->setDefaultWidget(new RaisedBrandTitlePlus(bar));
-  bar->insertAction(bar->actions().isEmpty() ? nullptr : bar->actions().first(), wa);
+  const int idx = vbl->indexOf(old);
+  old->hide();
+  auto* plus = new RaisedBrandTitlePlus(words);
+  if (idx >= 0)
+    vbl->insertWidget(idx, plus);
+  else
+    vbl->addWidget(plus);
 }
 
 // ---------------------------------------------------------------------------

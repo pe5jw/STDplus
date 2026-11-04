@@ -41,3 +41,5 @@ private:
   CwModem*    cwModem_    = nullptr;
   bool        featuresWired_ = false;
 };
+
+
