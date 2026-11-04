@@ -24,6 +24,7 @@ endif()
 
 find_package(Qt6 6.2 REQUIRED COMPONENTS Widgets Network WebSockets GuiPrivate)
 find_package(Qt6 OPTIONAL_COMPONENTS Vulkan)
+find_package(Qt6 OPTIONAL_COMPONENTS Multimedia)
 find_package(Vulkan QUIET)
 qt_standard_project_setup()
 
@@ -87,6 +88,8 @@ set(STDPLUS_SOURCES
   src/n1mm/N1mmCat.h
   src/voicekey/VoiceKeyer.cpp
   src/voicekey/VoiceKeyer.h
+  src/voicekey/DvkModeWidget.cpp
+  src/voicekey/DvkModeWidget.h
 )
 
 qt_add_executable(stdplus
@@ -128,6 +131,7 @@ endif()
 
 target_link_libraries(stdplus PRIVATE
   Qt6::Widgets Qt6::GuiPrivate Qt6::Network Qt6::WebSockets
+  $<$<TARGET_EXISTS:Qt6::Multimedia>:Qt6::Multimedia>
   $<$<TARGET_EXISTS:Qt6::Vulkan>:Qt6::Vulkan>
   $<$<TARGET_EXISTS:Vulkan::Vulkan>:Vulkan::Vulkan>)
 
@@ -164,6 +168,25 @@ if(WIN32)
       VERBATIM)
     add_custom_target(ft8dec DEPENDS "${FT8_DLL}")
     add_dependencies(stdplus ft8dec)
+    # Copy ft8dec.dll + Ft8Core.dll + MinGW runtime DLLs into the per-config output directory
+    add_custom_command(TARGET stdplus POST_BUILD
+      COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "${CMAKE_BINARY_DIR}/Ft8Core.dll"
+        "$<TARGET_FILE_DIR:stdplus>/Ft8Core.dll"
+      COMMENT "Copying Ft8Core.dll to output dir")
+    add_custom_command(TARGET stdplus POST_BUILD
+      COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "${FT8_DLL}"
+        "$<TARGET_FILE_DIR:stdplus>/ft8dec.dll"
+      COMMENT "Copying ft8dec.dll to output dir")
+    # MinGW runtime DLLs live next to ft8dec.dll (in CMAKE_BINARY_DIR)
+    foreach(_gcc_dll libgcc_s_seh-1.dll libstdc++-6.dll libwinpthread-1.dll)
+      add_custom_command(TARGET stdplus POST_BUILD
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+          "${CMAKE_BINARY_DIR}/${_gcc_dll}"
+          "$<TARGET_FILE_DIR:stdplus>/${_gcc_dll}"
+        COMMENT "Copying ${_gcc_dll} to output dir")
+    endforeach()
     message(STATUS "FT8 decoder DLL: enabled (MSHV found)")
   else()
     message(STATUS "FT8 decoder DLL: skipped (MSHV sources not found)")

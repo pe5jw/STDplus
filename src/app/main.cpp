@@ -3,7 +3,8 @@
 //
 // Replaces std/src/main.cpp.  Identical setup, but:
 //  - Uses MainWindowPlus (adds VoiceKeyer, N1mmCat, TciDialect)
-//  - Application name / display name = "STDplus"
+//  - Uses same QSettings as STD (org=N8SDR, app=STD) so settings are shared
+//  - ApplicationDisplayName = "STDplus" (window title only)
 
 #include "MainWindowPlus.h"
 #include "WaterfallGpu.h"
